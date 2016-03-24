@@ -53,15 +53,26 @@ impl From<NulError> for ExecError {
     }
 }
 
+/// Like `try!`, but it just returns the error directly without wrapping it
+/// in `Err`.  For functions that only return if something goes wrong.
+macro_rules! exec_try {
+    ( $ expr : expr ) => {
+        match $expr {
+            Ok(val) => val,
+            Err(err) => return From::from(err),
+        }
+    };
+}
+
 /// Run `program` with `args`, completely replacing the currently running
-/// program.
-pub fn execvp<'a, S, I>(program: S, args: I) -> Result<(), ExecError>
+/// program.  If it returns at all, it always returns an error.
+pub fn execvp<'a, S, I>(program: S, args: I) -> ExecError
     where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
 {
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
-    let program_cstring = try!(CString::new(program.as_ref()));
-    let arg_cstrings = try!(args.into_iter().map(|arg| {
+    let program_cstring = exec_try!(CString::new(program.as_ref()));
+    let arg_cstrings = exec_try!(args.into_iter().map(|arg| {
         CString::new(arg.as_ref())
     }).collect::<Result<Vec<_>, _>>());
     let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| {
@@ -77,9 +88,9 @@ pub fn execvp<'a, S, I>(program: S, args: I) -> Result<(), ExecError>
 
     // Handle our error result.
     if res < 0 {
-        Err(ExecError::Errno(errno()))
+        ExecError::Errno(errno())
     } else {
         // Should never happen.
-        Ok(())
+        panic!("execvp returned unexpectedly")
     }
 }
