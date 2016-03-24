@@ -1,6 +1,9 @@
 [package]
+authors = ["Eric Kidd <git@randomhacks.net>"]
+license = "MIT/Apache-2.0"
 name = "exec"
 version = "0.1.0"
-authors = ["Eric Kidd <git@randomhacks.net>"]
 
 [dependencies]
+errno = "0.1.6"
+libc = "0.2.8"
