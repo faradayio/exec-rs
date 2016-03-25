@@ -1,4 +1,10 @@
 //! A simple wrapper around the C library's `execvp` function.
+//!
+//! For examples, see [the repository](https://github.com/faradayio/exec-rs).
+//!
+//! We'd love to fully integrate this with `std::process::Command`, but
+//! that module doesn't export sufficient hooks to allow us to add a new
+//! way to execute a program.
 
 extern crate errno;
 extern crate libc;
@@ -72,6 +78,13 @@ macro_rules! exec_try {
 
 /// Run `program` with `args`, completely replacing the currently running
 /// program.  If it returns at all, it always returns an error.
+///
+/// Note that `program` and the first element of `args` will normally be
+/// identical.  The former is the program we ask the operating system to
+/// run, and the latter is the value that will show up in `argv[0]` when
+/// the program executes.  On POSIX systems, these can technically be
+/// completely different, and we've perserved that much of the low-level
+/// API here.
 pub fn execvp<'a, S, I>(program: S, args: I) -> ExecError
     where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
 {
