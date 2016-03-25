@@ -10,3 +10,6 @@ version = "0.1.0"
 [dependencies]
 errno = "0.1.6"
 libc = "0.2.8"
+
+[features]
+unstable = []
