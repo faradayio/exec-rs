@@ -1,6 +1,7 @@
 [package]
 authors = ["Eric Kidd <git@randomhacks.net>"]
 description = "Use the POSIX exec function to replace the running program with another"
+documentation = "http://faradayio.github.io/exec-rs/exec/index.html"
 license = "MIT/Apache-2.0"
 name = "exec"
 readme = "README.md"
