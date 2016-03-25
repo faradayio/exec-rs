@@ -11,7 +11,13 @@ use std::fmt;
 use std::ptr;
 
 /// Represents an error calling `exec`.
+///
+/// This is marked `#[must_use]`, which is unusual for error types.
+/// Normally, the fact that `Result` is marked in this fashion is
+/// sufficient, but in this case, this error is returned bare from
+/// functions that only return a result if they fail.
 #[derive(Debug)]
+#[must_use]
 pub enum ExecError {
     /// One of the strings passed to `execv` contained an internal null byte
     /// and can't be passed correctly to C.
