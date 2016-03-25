@@ -85,6 +85,25 @@ macro_rules! exec_try {
 /// the program executes.  On POSIX systems, these can technically be
 /// completely different, and we've perserved that much of the low-level
 /// API here.
+///
+/// # Examples
+///
+/// ```no_run
+/// let err = exec::execvp("echo", &["echo", "foo"]);
+/// println!("Error: {}", err);
+/// ```
+///
+/// If we wanted to take our command-line arguments and treat them as a
+/// program to run, we could do it like this:
+///
+/// ```no_run
+/// use std::env;
+///
+/// let args: Vec<String> = env::args().skip(1).collect();
+/// let program = args[0].clone();
+/// let err = exec::execvp(program, &args);
+/// println!("Error: {}", err);
+/// ```
 pub fn execvp<'a, S, I>(program: S, args: I) -> ExecError
     where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
 {
