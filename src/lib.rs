@@ -104,7 +104,7 @@ macro_rules! exec_try {
 /// let err = exec::execvp(program, &args);
 /// println!("Error: {}", err);
 /// ```
-pub fn execvp<'a, S, I>(program: S, args: I) -> ExecError
+pub fn execvp<S, I>(program: S, args: I) -> ExecError
     where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
 {
     // Add null terminations to our strings and our argument array,
