@@ -12,10 +12,11 @@ extern crate libc;
 use errno::{Errno, errno};
 use std::error;
 use std::error::Error as ErrorTrait; // Include for methods, not name.
-use std::ffi::{CString, NulError};
+use std::ffi::{CString, NulError, OsStr};
 use std::iter::{IntoIterator, Iterator};
 use std::fmt;
 use std::ptr;
+use std::os::unix::ffi::OsStrExt;
 
 /// Represents an error calling `exec`.
 ///
@@ -106,13 +107,14 @@ macro_rules! exec_try {
 /// println!("Error: {}", err);
 /// ```
 pub fn execvp<S, I>(program: S, args: I) -> Error
-    where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
+    where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
 {
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
-    let program_cstring = exec_try!(CString::new(program.as_ref()));
+    let program_cstring =
+        exec_try!(CString::new(program.as_ref().as_bytes()));
     let arg_cstrings = exec_try!(args.into_iter().map(|arg| {
-        CString::new(arg.as_ref())
+        CString::new(arg.as_ref().as_bytes())
     }).collect::<Result<Vec<_>, _>>());
     let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| {
         arg.as_bytes_with_nul().as_ptr() as *const i8
