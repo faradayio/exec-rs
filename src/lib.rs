@@ -10,7 +10,8 @@ extern crate errno;
 extern crate libc;
 
 use errno::{Errno, errno};
-use std::error::{self, Error};
+use std::error;
+use std::error::Error as ErrorTrait; // Include for methods, not name.
 use std::ffi::{CString, NulError};
 use std::iter::{IntoIterator, Iterator};
 use std::fmt;
@@ -24,7 +25,7 @@ use std::ptr;
 /// functions that only return a result if they fail.
 #[derive(Debug)]
 #[must_use]
-pub enum ExecError {
+pub enum Error {
     /// One of the strings passed to `execv` contained an internal null byte
     /// and can't be passed correctly to C.
     BadArgument(NulError),
@@ -32,36 +33,36 @@ pub enum ExecError {
     Errno(Errno),
 }
 
-impl error::Error for ExecError {
+impl error::Error for Error {
     fn description(&self) -> &str {
         match self {
-            &ExecError::BadArgument(_) => "bad argument to exec",
-            &ExecError::Errno(_) => "couldn't exec process",
+            &Error::BadArgument(_) => "bad argument to exec",
+            &Error::Errno(_) => "couldn't exec process",
         }
     }
     fn cause(&self) -> Option<&error::Error> {
         match self {
-            &ExecError::BadArgument(ref err) => Some(err),
-            &ExecError::Errno(_) => None,
+            &Error::BadArgument(ref err) => Some(err),
+            &Error::Errno(_) => None,
         }
     }
 }
 
-impl fmt::Display for ExecError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &ExecError::BadArgument(ref err) =>
+            &Error::BadArgument(ref err) =>
                 write!(f, "{}: {}", self.description(), err),
-            &ExecError::Errno(err) =>
+            &Error::Errno(err) =>
                 write!(f, "{}: {}", self.description(), err),
         }
     }
 }
 
-impl From<NulError> for ExecError {
+impl From<NulError> for Error {
     /// Convert a `NulError` into an `ExecError`.
-    fn from(err: NulError) -> ExecError {
-        ExecError::BadArgument(err)
+    fn from(err: NulError) -> Error {
+        Error::BadArgument(err)
     }
 }
 
@@ -104,7 +105,7 @@ macro_rules! exec_try {
 /// let err = exec::execvp(program, &args);
 /// println!("Error: {}", err);
 /// ```
-pub fn execvp<S, I>(program: S, args: I) -> ExecError
+pub fn execvp<S, I>(program: S, args: I) -> Error
     where S: AsRef<str>, I: IntoIterator, I::Item: AsRef<str>
 {
     // Add null terminations to our strings and our argument array,
@@ -126,7 +127,7 @@ pub fn execvp<S, I>(program: S, args: I) -> ExecError
 
     // Handle our error result.
     if res < 0 {
-        ExecError::Errno(errno())
+        Error::Errno(errno())
     } else {
         // Should never happen.
         panic!("execvp returned unexpectedly")
