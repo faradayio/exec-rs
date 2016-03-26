@@ -7,22 +7,11 @@
 This is a simple Rust wrapper around `execvp`.  It can be used as follows:
 
 ```rust
-let err = exec::execvp("echo", &["echo", "foo"]);
+let err = exec::Command::new("echo")
+    .arg("hello").arg("world")
+    .exec();
 println!("Error: {}", err);
 ```
 
-We pass `"echo"` twice: Once as the name of the program we want the
-operating system to execute, and once as the executed program's `argv[0]`.
-Note that if `execvp` returns, it will always return an error.
-
-If we want to treat our command line arguments as program to be run, we
-could do it as follows:
-
-```rust
-// Get our command line args, dropping the first one.
-let args: Vec<String> = env::args().skip(1).collect();
-let program = args[0].clone();
-
-let err = exec::execvp(program, &args);
-println!("Error: {}", err);
-```
+Note that if `exec` returns, it will always return an error.  There's also
+a lower-level `exec::execvp` function if you need to use it.

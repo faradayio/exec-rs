@@ -12,7 +12,7 @@ extern crate libc;
 use errno::{Errno, errno};
 use std::error;
 use std::error::Error as ErrorTrait; // Include for methods, not name.
-use std::ffi::{CString, NulError, OsStr};
+use std::ffi::{CString, NulError, OsStr, OsString};
 use std::iter::{IntoIterator, Iterator};
 use std::fmt;
 use std::ptr;
@@ -94,18 +94,6 @@ macro_rules! exec_try {
 /// let err = exec::execvp("echo", &["echo", "foo"]);
 /// println!("Error: {}", err);
 /// ```
-///
-/// If we wanted to take our command-line arguments and treat them as a
-/// program to run, we could do it like this:
-///
-/// ```no_run
-/// use std::env;
-///
-/// let args: Vec<String> = env::args().skip(1).collect();
-/// let program = args[0].clone();
-/// let err = exec::execvp(program, &args);
-/// println!("Error: {}", err);
-/// ```
 pub fn execvp<S, I>(program: S, args: I) -> Error
     where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
 {
@@ -133,5 +121,60 @@ pub fn execvp<S, I>(program: S, args: I) -> Error
     } else {
         // Should never happen.
         panic!("execvp returned unexpectedly")
+    }
+}
+
+/// Build a command to execute.  This has an API which is deliberately
+/// similar to `std::process::Command`.
+///
+/// ```no_run
+/// let err = exec::Command::new("echo")
+///     .arg("hello")
+///     .arg("world")
+///     .exec();
+/// println!("Error: {}", err);
+/// ```
+///
+/// If the `exec` function succeeds, it will never return.
+pub struct Command {
+    /// The program name and arguments, in typical C `argv` style.
+    argv: Vec<OsString>,
+}
+
+impl Command {
+    /// Create a new command builder, specifying the program to run.  The
+    /// program will be searched for using the usual rules for `PATH`.
+    pub fn new<S: AsRef<OsStr>>(program: S) -> Command {
+        Command {
+            argv: vec!(program.as_ref().to_owned()),
+        }
+    }
+
+    /// Add an argument to the command builder.  This can be chained.
+    pub fn arg<S: AsRef<OsStr>>(&mut self, arg: S) -> &mut Command {
+        self.argv.push(arg.as_ref().to_owned());
+        self
+    }
+
+    /// Add multiple arguments to the command builder.  This can be
+    /// chained.
+    ///
+    /// ```no_run
+    /// let err = exec::Command::new("echo")
+    ///     .args(&["hello", "world"])
+    ///     .exec();
+    /// println!("Error: {}", err);
+    /// ```
+    pub fn args<S: AsRef<OsStr>>(&mut self, args: &[S]) -> &mut Command {
+        for arg in args {
+            self.arg(arg.as_ref());
+        }
+        self
+    }
+
+    /// Execute the command we built.  If this function succeeds, it will
+    /// never return.
+    pub fn exec(&mut self) -> Error {
+        execvp(&self.argv[0], &self.argv)
     }
 }
