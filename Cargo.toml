@@ -6,10 +6,10 @@ license = "MIT/Apache-2.0"
 name = "exec"
 readme = "README.md"
 repository = "https://github.com/faradayio/exec-rs"
-version = "0.2.0"
+version = "0.3.0"
 
 [dependencies]
-errno = "0.1.6"
+errno = "0.2"
 libc = "0.2.8"
 
 [features]
