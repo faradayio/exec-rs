@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["Error","Represents an error calling `exec`."]],"fn":[["execvp","Run `program` with `args`, completely replacing the currently running program.  If it returns at all, it always returns an error."]],"struct":[["Command","Build a command to execute.  This has an API which is deliberately similar to `std::process::Command`."]]});
