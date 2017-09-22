@@ -105,14 +105,13 @@ pub fn execvp<S, I>(program: S, args: I) -> Error
         CString::new(arg.as_ref().as_bytes())
     }).collect::<Result<Vec<_>, _>>());
     let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| {
-        arg.as_bytes_with_nul().as_ptr() as *const i8
+        arg.as_ptr()
     }).collect();
     arg_charptrs.push(ptr::null());
 
     // Use an `unsafe` block so that we can call directly into C.
     let res = unsafe {
-        libc::execvp(program_cstring.as_bytes_with_nul().as_ptr() as *const i8,
-                     arg_charptrs.as_ptr())
+        libc::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr())
     };
 
     // Handle our error result.
