@@ -12,11 +12,10 @@ extern crate libc;
 use errno::{Errno, errno};
 use std::error;
 use std::error::Error as ErrorTrait; // Include for methods, not name.
-use std::ffi::{CString, NulError, OsStr, OsString};
+use std::ffi::{NulError, OsStr, OsString};
 use std::iter::{IntoIterator, Iterator};
 use std::fmt;
 use std::ptr;
-use std::os::unix::ffi::OsStrExt;
 
 /// Represents an error calling `exec`.
 ///
@@ -67,6 +66,12 @@ impl From<NulError> for Error {
     }
 }
 
+impl From<Errno> for Error {
+    fn from(err: Errno) -> Error {
+        Error::Errno(err)
+    }
+}
+
 /// Like `try!`, but it just returns the error directly without wrapping it
 /// in `Err`.  For functions that only return if something goes wrong.
 macro_rules! exec_try {
@@ -97,6 +102,16 @@ macro_rules! exec_try {
 pub fn execvp<S, I>(program: S, args: I) -> Error
     where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
 {
+    execvp_impl(program, args)
+}
+
+#[cfg(unix)]
+fn execvp_impl<S, I>(program: S, args: I) -> Error
+    where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
+{
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
     let program_cstring =
@@ -120,6 +135,50 @@ pub fn execvp<S, I>(program: S, args: I) -> Error
     } else {
         // Should never happen.
         panic!("execvp returned unexpectedly")
+    }
+}
+
+#[cfg(windows)]
+fn execvp_impl<S, I>(program: S, args: I) -> Error
+    where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
+{
+    use std::os::windows::ffi::OsStrExt;
+
+    let wcstring = |s: &OsStr| -> Result<Vec<u16>, Errno> {
+        let mut vec: Vec<u16> = s.encode_wide().collect();
+        if vec.iter().any(|&x| x == 0) {
+            // We have an interior null. The Unix impl returns a NulError, but that's not
+            // constructable, so return EINVAL instead.
+            Err(Errno(libc::EINVAL))
+        } else {
+            vec.push(0); // append null terminator
+            Ok(vec)
+        }
+    };
+
+    let program_wide = exec_try!(wcstring(program.as_ref()));
+    let args_wide = exec_try!(args.into_iter()
+        .map(|arg| wcstring(arg.as_ref()))
+        .collect::<Result<Vec<_>, _>>());
+    let mut arg_ptrs: Vec<_> = args_wide.iter().map(|arg| arg.as_ptr()).collect();
+    arg_ptrs.push(ptr::null());
+
+    extern "C" {
+        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/execvp-wexecvp
+        fn _wexecvp(cmdname: *const libc::wchar_t, argv: *const *const libc::wchar_t)
+            -> libc::intptr_t;
+    }
+
+    let res = unsafe {
+        _wexecvp(program_wide.as_ptr(), arg_ptrs.as_ptr())
+    };
+
+    // Handle our error result.
+    if res < 0 {
+        Error::Errno(errno())
+    } else {
+        // Should never happen.
+        panic!("_wexecvp returned unexpectedly")
     }
 }
 
