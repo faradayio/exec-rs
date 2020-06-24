@@ -11,11 +11,13 @@ extern crate libc;
 
 use errno::{Errno, errno};
 use std::error;
-use std::error::Error as ErrorTrait; // Include for methods, not name.
-use std::ffi::{NulError, OsStr, OsString};
+use std::ffi::{OsStr, OsString};
 use std::iter::{IntoIterator, Iterator};
 use std::fmt;
 use std::ptr;
+
+#[cfg(unix)]
+use std::ffi::NulError;
 
 /// Represents an error calling `exec`.
 ///
@@ -28,22 +30,18 @@ use std::ptr;
 pub enum Error {
     /// One of the strings passed to `execv` contained an internal null byte
     /// and can't be passed correctly to C.
-    BadArgument(NulError),
+    #[cfg(unix)] BadArgument(NulError),
+    #[cfg(windows)] BadArgument,
     /// An error was returned by the system.
     Errno(Errno),
 }
 
 impl error::Error for Error {
-    fn description(&self) -> &str {
+    #[cfg(unix)]
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
-            &Error::BadArgument(_) => "bad argument to exec",
-            &Error::Errno(_) => "couldn't exec process",
-        }
-    }
-    fn cause(&self) -> Option<&error::Error> {
-        match self {
-            &Error::BadArgument(ref err) => Some(err),
-            &Error::Errno(_) => None,
+            Error::BadArgument(ref err) => Some(err),
+            Error::Errno(_) => None,
         }
     }
 }
@@ -51,14 +49,17 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::BadArgument(ref err) =>
-                write!(f, "{}: {}", self.description(), err),
-            &Error::Errno(err) =>
-                write!(f, "{}: {}", self.description(), err),
+            #[cfg(unix)] Error::BadArgument(ref err) =>
+                write!(f, "bad argument to exec: {}", err),
+            #[cfg(windows)] Error::BadArgument =>
+                write!(f, "bad argument to exec"),
+            Error::Errno(err) =>
+                write!(f, "couldn't exec process: {}", err),
         }
     }
 }
 
+#[cfg(unix)]
 impl From<NulError> for Error {
     /// Convert a `NulError` into an `ExecError`.
     fn from(err: NulError) -> Error {
@@ -144,12 +145,12 @@ fn execvp_impl<S, I>(program: S, args: I) -> Error
 {
     use std::os::windows::ffi::OsStrExt;
 
-    let wcstring = |s: &OsStr| -> Result<Vec<u16>, Errno> {
+    let wcstring = |s: &OsStr| -> Result<Vec<u16>, Error> {
         let mut vec: Vec<u16> = s.encode_wide().collect();
         if vec.iter().any(|&x| x == 0) {
-            // We have an interior null. The Unix impl returns a NulError, but that's not
-            // constructable, so return EINVAL instead.
-            Err(Errno(libc::EINVAL))
+            // We have an interior null.
+            // The Unix impl includes a NulError, but that's only constructible using CString.
+            Err(Error::BadArgument)
         } else {
             vec.push(0); // append null terminator
             Ok(vec)
