@@ -16,9 +16,6 @@ use std::iter::{IntoIterator, Iterator};
 use std::fmt;
 use std::ptr;
 
-#[cfg(unix)]
-use std::ffi::NulError;
-
 /// Represents an error calling `exec`.
 ///
 /// This is marked `#[must_use]`, which is unusual for error types.
@@ -30,40 +27,21 @@ use std::ffi::NulError;
 pub enum Error {
     /// One of the strings passed to `execv` contained an internal null byte
     /// and can't be passed correctly to C.
-    #[cfg(unix)] BadArgument(NulError),
-    #[cfg(windows)] BadArgument,
+    NullByteInArgument,
     /// An error was returned by the system.
     Errno(Errno),
 }
 
-impl error::Error for Error {
-    #[cfg(unix)]
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            Error::BadArgument(ref err) => Some(err),
-            Error::Errno(_) => None,
-        }
-    }
-}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            #[cfg(unix)] Error::BadArgument(ref err) =>
-                write!(f, "bad argument to exec: {}", err),
-            #[cfg(windows)] Error::BadArgument =>
-                write!(f, "bad argument to exec"),
+            Error::NullByteInArgument =>
+                write!(f, "interior NUL byte in string argument to exec"),
             Error::Errno(err) =>
                 write!(f, "couldn't exec process: {}", err),
         }
-    }
-}
-
-#[cfg(unix)]
-impl From<NulError> for Error {
-    /// Convert a `NulError` into an `ExecError`.
-    fn from(err: NulError) -> Error {
-        Error::BadArgument(err)
     }
 }
 
@@ -115,14 +93,21 @@ fn execvp_impl<S, I>(program: S, args: I) -> Error
 
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
-    let program_cstring =
-        exec_try!(CString::new(program.as_ref().as_bytes()));
-    let arg_cstrings = exec_try!(args.into_iter().map(|arg| {
-        CString::new(arg.as_ref().as_bytes())
-    }).collect::<Result<Vec<_>, _>>());
-    let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| {
-        arg.as_ptr()
-    }).collect();
+    let program_cstring = exec_try!(
+        CString::new(program.as_ref().as_bytes())
+            .map_err(|_| Error::NullByteInArgument)
+    );
+    let arg_cstrings = exec_try!(
+        args.into_iter()
+            .map(|arg| {
+                CString::new(arg.as_ref().as_bytes())
+                    .map_err(|_| Error::NullByteInArgument)
+            })
+            .collect::<Result<Vec<_>, _>>()
+    );
+    let mut arg_charptrs: Vec<_> = arg_cstrings.iter()
+        .map(|arg| arg.as_ptr())
+        .collect();
     arg_charptrs.push(ptr::null());
 
     // Use an `unsafe` block so that we can call directly into C.
@@ -150,7 +135,7 @@ fn execvp_impl<S, I>(program: S, args: I) -> Error
         if vec.iter().any(|&x| x == 0) {
             // We have an interior null.
             // The Unix impl includes a NulError, but that's only constructible using CString.
-            Err(Error::BadArgument)
+            Err(Error::NullByteInArgument)
         } else {
             vec.push(0); // append null terminator
             Ok(vec)
