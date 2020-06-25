@@ -125,6 +125,13 @@ fn execvp_impl<S, I>(program: S, args: I) -> Error
 }
 
 #[cfg(windows)]
+extern "C" {
+    // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/execvp-wexecvp
+    pub fn _wexecvp(cmdname: *const libc::wchar_t, argv: *const *const libc::wchar_t)
+        -> libc::intptr_t;
+}
+
+#[cfg(windows)]
 fn execvp_impl<S, I>(program: S, args: I) -> Error
     where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
 {
@@ -148,12 +155,6 @@ fn execvp_impl<S, I>(program: S, args: I) -> Error
         .collect::<Result<Vec<_>, _>>());
     let mut arg_ptrs: Vec<_> = args_wide.iter().map(|arg| arg.as_ptr()).collect();
     arg_ptrs.push(ptr::null());
-
-    extern "C" {
-        // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/execvp-wexecvp
-        fn _wexecvp(cmdname: *const libc::wchar_t, argv: *const *const libc::wchar_t)
-            -> libc::intptr_t;
-    }
 
     let res = unsafe {
         _wexecvp(program_wide.as_ptr(), arg_ptrs.as_ptr())
