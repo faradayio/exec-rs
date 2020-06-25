@@ -12,7 +12,7 @@ fn main() {
 
     // Exec the specified program.  If all goes well, this will never
     // return.  If it does return, it will always retun an error.
-    let err = exec::Command::new(&argv[0]).args(&argv).exec();
+    let err = exec::Command::new(&argv[0]).args(&argv[1..]).exec();
     println!("Error: {}", err);
     process::exit(1);
 }
