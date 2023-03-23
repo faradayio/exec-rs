@@ -9,14 +9,14 @@
 extern crate errno;
 extern crate libc;
 
-use errno::{Errno, errno};
+use errno::{errno, Errno};
 use std::error;
 use std::error::Error as ErrorTrait; // Include for methods, not name.
 use std::ffi::{CString, NulError, OsStr, OsString};
-use std::iter::{IntoIterator, Iterator};
 use std::fmt;
-use std::ptr;
+use std::iter::{IntoIterator, Iterator};
 use std::os::unix::ffi::OsStrExt;
+use std::ptr;
 
 /// Represents an error calling `exec`.
 ///
@@ -52,10 +52,8 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::BadArgument(ref err) =>
-                write!(f, "{}: {}", self.description(), err),
-            &Error::Errno(err) =>
-                write!(f, "{}: {}", self.description(), err),
+            &Error::BadArgument(ref err) => write!(f, "{}: {}", self.description(), err),
+            &Error::Errno(err) => write!(f, "{}: {}", self.description(), err),
         }
     }
 }
@@ -95,24 +93,23 @@ macro_rules! exec_try {
 /// println!("Error: {}", err);
 /// ```
 pub fn execvp<S, I>(program: S, args: I) -> Error
-    where S: AsRef<OsStr>, I: IntoIterator, I::Item: AsRef<OsStr>
+where
+    S: AsRef<OsStr>,
+    I: IntoIterator,
+    I::Item: AsRef<OsStr>,
 {
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
-    let program_cstring =
-        exec_try!(CString::new(program.as_ref().as_bytes()));
-    let arg_cstrings = exec_try!(args.into_iter().map(|arg| {
-        CString::new(arg.as_ref().as_bytes())
-    }).collect::<Result<Vec<_>, _>>());
-    let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| {
-        arg.as_ptr()
-    }).collect();
+    let program_cstring = exec_try!(CString::new(program.as_ref().as_bytes()));
+    let arg_cstrings = exec_try!(args
+        .into_iter()
+        .map(|arg| { CString::new(arg.as_ref().as_bytes()) })
+        .collect::<Result<Vec<_>, _>>());
+    let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| arg.as_ptr()).collect();
     arg_charptrs.push(ptr::null());
 
     // Use an `unsafe` block so that we can call directly into C.
-    let res = unsafe {
-        libc::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr())
-    };
+    let res = unsafe { libc::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr()) };
 
     // Handle our error result.
     if res < 0 {
@@ -145,7 +142,7 @@ impl Command {
     /// program will be searched for using the usual rules for `PATH`.
     pub fn new<S: AsRef<OsStr>>(program: S) -> Command {
         Command {
-            argv: vec!(program.as_ref().to_owned()),
+            argv: vec![program.as_ref().to_owned()],
         }
     }
 
