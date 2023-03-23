@@ -11,7 +11,6 @@ extern crate libc;
 
 use errno::{errno, Errno};
 use std::error;
-use std::error::Error as ErrorTrait; // Include for methods, not name.
 use std::ffi::{CString, NulError, OsStr, OsString};
 use std::fmt;
 use std::iter::{IntoIterator, Iterator};
@@ -41,7 +40,7 @@ impl error::Error for Error {
             &Error::Errno(_) => "couldn't exec process",
         }
     }
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match self {
             &Error::BadArgument(ref err) => Some(err),
             &Error::Errno(_) => None,
@@ -52,8 +51,8 @@ impl error::Error for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::BadArgument(ref err) => write!(f, "{}: {}", self.description(), err),
-            &Error::Errno(err) => write!(f, "{}: {}", self.description(), err),
+            &Error::BadArgument(ref err) => write!(f, "{}: {}", self.to_string(), err),
+            &Error::Errno(err) => write!(f, "{}: {}", self.to_string(), err),
         }
     }
 }
