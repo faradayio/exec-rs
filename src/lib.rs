@@ -99,16 +99,11 @@ where
 {
     // Add null terminations to our strings and our argument array,
     // converting them into a C-compatible format.
-    let program_cstring = exec_try!(CString::new(program.as_ref().as_bytes()));
-    let arg_cstrings = exec_try!(args
-        .into_iter()
-        .map(|arg| { CString::new(arg.as_ref().as_bytes()) })
-        .collect::<Result<Vec<_>, _>>());
-    let mut arg_charptrs: Vec<_> = arg_cstrings.iter().map(|arg| arg.as_ptr()).collect();
-    arg_charptrs.push(ptr::null());
+    let program_cstring = exec_try!(to_program_cstring(program));
+    let argv = exec_try!(to_argv(args));
 
     // Use an `unsafe` block so that we can call directly into C.
-    let res = unsafe { libc::execvp(program_cstring.as_ptr(), arg_charptrs.as_ptr()) };
+    let res = unsafe { libc::execvp(program_cstring.as_ptr(), argv.char_ptrs.as_ptr()) };
 
     // Handle our error result.
     if res < 0 {
@@ -117,6 +112,127 @@ where
         // Should never happen.
         panic!("execvp returned unexpectedly")
     }
+}
+
+/// Run `program` with `args` and environment `envs`, completely replacing
+/// the currently running program. If it returns at all, it always return
+/// an error.
+///
+/// Note that `program` and the first element of `args` will normally be
+/// identical. The former is the program we ask the operating system to
+/// run, and the latter is the value that will show up in `argv[0]` when
+/// the program executes. On POSIX systems, these can technically be
+/// completely different, and we've preserved that much of the low-level
+/// API here.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::env::vars_os;
+/// use std::ffi::OsString;
+/// let err = execvpe(
+///     "bash",
+///     ["bash"],
+///     vars_os().chain([(OsString::from("NAME"), OsString::from("VALUE"))]),
+/// println!("Error: {}", err);
+/// ```
+pub fn execvpe<S, I, J, N, V>(program: S, args: I, envs: J) -> Error
+where
+    S: AsRef<OsStr>,
+    I: IntoIterator,
+    I::Item: AsRef<OsStr>,
+    J: IntoIterator<Item = (N, V)>,
+    N: AsRef<OsStr> + std::fmt::Debug,
+    V: AsRef<OsStr> + std::fmt::Debug,
+{
+    // Add null terminations to our strings and our argument array,
+    // converting them into a C-compatible format.
+    let program_cstring = exec_try!(to_program_cstring(program));
+    let argv = exec_try!(to_argv(args));
+    let envp = exec_try!(to_envp(envs));
+
+    // Use an `unsafe` block so that we can call directly into C.
+    let res = unsafe {
+        libc::execvpe(
+            program_cstring.as_ptr(),
+            argv.char_ptrs.as_ptr(),
+            envp.char_ptrs.as_ptr(),
+        )
+    };
+
+    // Handle our error result.
+    if res < 0 {
+        Error::Errno(errno())
+    } else {
+        // Should never happen.
+        panic!("execvp returned unexpectedly")
+    }
+}
+
+fn to_program_cstring<S>(program: S) -> std::result::Result<CString, NulError>
+where
+    S: AsRef<OsStr>,
+{
+    CString::new(program.as_ref().as_bytes())
+}
+
+// Struct ensures that cstrings have same lifetime as char_ptrs that points into them
+struct Argv {
+    #[allow(dead_code)]
+    cstrings: Vec<CString>,
+    char_ptrs: Vec<*const i8>,
+}
+
+fn to_argv<I>(args: I) -> std::result::Result<Argv, NulError>
+where
+    I: IntoIterator,
+    I::Item: AsRef<OsStr>,
+{
+    let cstrings = args
+        .into_iter()
+        .map(|arg| CString::new(arg.as_ref().as_bytes()))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut char_ptrs = cstrings.iter().map(|arg| arg.as_ptr()).collect::<Vec<_>>();
+    char_ptrs.push(ptr::null());
+
+    Ok(Argv {
+        cstrings: cstrings,
+        char_ptrs: char_ptrs,
+    })
+}
+
+// Struct ensures that cstrings have same lifetime as char_ptrs that points into them
+struct Envp {
+    #[allow(dead_code)]
+    cstrings: Vec<CString>,
+    char_ptrs: Vec<*const i8>,
+}
+
+fn to_envp<J, N, V>(envs: J) -> std::result::Result<Envp, NulError>
+where
+    J: IntoIterator<Item = (N, V)>,
+    N: AsRef<OsStr> + std::fmt::Debug,
+    V: AsRef<OsStr> + std::fmt::Debug,
+{
+    let cstrings = envs
+        .into_iter()
+        .map(|(n, v)| {
+            let mut temp: OsString = OsString::new();
+            temp.push(n);
+            temp.push("=");
+            temp.push(v);
+            CString::new(temp.as_bytes())
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let mut char_ptrs = cstrings.iter().map(|x| x.as_ptr()).collect::<Vec<_>>();
+    char_ptrs.push(ptr::null());
+
+    Ok(Envp {
+        cstrings: cstrings,
+        char_ptrs: char_ptrs,
+    })
 }
 
 /// Build a command to execute.  This has an API which is deliberately
