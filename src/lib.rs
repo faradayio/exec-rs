@@ -136,6 +136,7 @@ where
 ///     vars_os().chain([(OsString::from("NAME"), OsString::from("VALUE"))]),
 /// println!("Error: {}", err);
 /// ```
+#[cfg(not(target_os = "macos"))]
 pub fn execvpe<S, I, J, N, V>(program: S, args: I, envs: J) -> Error
 where
     S: AsRef<OsStr>,
@@ -203,12 +204,14 @@ where
 }
 
 // Struct ensures that cstrings have same lifetime as char_ptrs that points into them
+#[cfg(not(target_os = "macos"))]
 struct Envp {
     #[allow(dead_code)]
     cstrings: Vec<CString>,
     char_ptrs: Vec<*const i8>,
 }
 
+#[cfg(not(target_os = "macos"))]
 fn to_envp<J, N, V>(envs: J) -> std::result::Result<Envp, NulError>
 where
     J: IntoIterator<Item = (N, V)>,
